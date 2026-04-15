@@ -25,7 +25,14 @@ export class AssetPage {
     this.page = page;
     // Role + accessible name: no data-testid on TradeGenius-owned UI.
     this.signInButton = page.getByRole('button', { name: 'Sign In' });
-    this.signInDialog = page.getByRole('dialog', { name: 'Sign in or create an account' });
+    // The dialog's `aria-labelledby` points to a title node that does not
+    // render a clean accessible name ({ name: '...' } misses it at runtime
+    // even though the title is in the DOM). Anchoring by visible title text
+    // is the stable alternative — still precise, and keeps the Reown
+    // `<w3m-modal>` (a different dialog) from matching.
+    this.signInDialog = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Sign in or create an account' });
     this.connectWithWalletButton = this.signInDialog.getByRole('button', {
       name: 'Connect with Wallet',
     });
