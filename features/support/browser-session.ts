@@ -4,6 +4,7 @@ import { MetaMaskWallet } from '../../pages/wallet/MetaMaskWallet.ts';
 
 import { loadEnv } from './env.ts';
 import { Logger } from './logger.ts';
+import { initMetaMaskExtensionId } from './metamask-selectors.ts';
 
 const logger = new Logger('browser-session');
 
@@ -37,8 +38,13 @@ export async function initSession(): Promise<SessionRefs> {
     headless: env.headless,
   });
 
+  // The extension ID is assigned by Chromium at install time — the
+  // reconciler and selector helpers need it to build chrome-extension://
+  // URLs and match MM service workers. Register it exactly once here.
+  initMetaMaskExtensionId(refs.metaMask.extensionId);
+
   session = refs;
-  logger.info('session ready');
+  logger.info('session ready (mm extension id=%s)', refs.metaMask.extensionId);
   return session;
 }
 

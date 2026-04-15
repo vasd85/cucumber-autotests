@@ -12,13 +12,67 @@
  *  - popup-URL patterns (so we can identify and reach the Connect popup
  *    directly when Dappwright's helper is not applicable, e.g. rejecting
  *    via explicit Cancel click).
+ *
+ * The MetaMask extension ID is **runtime-resolved**. Dappwright installs
+ * the extension as an *unpacked* build, so its Chrome-assigned ID differs
+ * from the Web Store ID (`nkbihfbeogaeaoehlefnkodbefgpgknn`) and differs
+ * per install. `initMetaMaskExtensionId()` is called once from
+ * `browser-session.initSession()` with the ID read off the wallet's own
+ * home page URL; all other modules go through `getMetaMaskExtensionId()`
+ * or `getMetaMaskHomeUrl()` so nothing hardcodes the wrong value.
  */
-export const METAMASK_EXTENSION_ID = 'nkbihfbeogaeaoehlefnkodbefgpgknn';
 
-export const MetaMaskUrls = {
-  home: `chrome-extension://${METAMASK_EXTENSION_ID}/home.html#/`,
-  unlock: `chrome-extension://${METAMASK_EXTENSION_ID}/home.html#unlock`,
-  permissions: `chrome-extension://${METAMASK_EXTENSION_ID}/home.html#permissions`,
+let resolvedExtensionId: string | null = null;
+
+/**
+ * Records the Chrome-assigned extension ID for the Dappwright-installed
+ * MetaMask. Call exactly once in `BeforeAll` after `bootstrap()` resolves.
+ */
+export function initMetaMaskExtensionId(extensionId: string): void {
+  if (!/^[a-p]{32}$/.test(extensionId)) {
+    // Chrome extension IDs are 32-character strings of lowercase letters a-p
+    // (see https://developer.chrome.com/docs/extensions/mv3/manifest/). Fail
+    // loud here so a malformed ID does not silently propagate into URL
+    // builders later.
+    throw new Error(`Invalid MetaMask extension ID: "${extensionId}"`);
+  }
+  resolvedExtensionId = extensionId;
+}
+
+export function getMetaMaskExtensionId(): string {
+  if (!resolvedExtensionId) {
+    throw new Error(
+      'MetaMask extension ID not initialised. Call initMetaMaskExtensionId() from BeforeAll before accessing selectors.',
+    );
+  }
+  return resolvedExtensionId;
+}
+
+/**
+ * Builds an absolute URL inside the MetaMask home page, e.g.
+ * `getMetaMaskHomeUrl('permissions')` →
+ * `chrome-extension://<id>/home.html#permissions`.
+ */
+export function getMetaMaskHomeUrl(hashPath = ''): string {
+  const id = getMetaMaskExtensionId();
+  const suffix = hashPath ? `#${hashPath}` : '#/';
+  return `chrome-extension://${id}/home.html${suffix}`;
+}
+
+/**
+ * Builds the `chrome-extension://<id>` origin prefix — used to match
+ * service-worker URLs owned by MetaMask.
+ */
+export function getMetaMaskOriginPrefix(): string {
+  return `chrome-extension://${getMetaMaskExtensionId()}`;
+}
+
+/**
+ * URL path fragments used to recognise MetaMask popup tabs. These are
+ * ID-agnostic (only the path+hash matter), so they stay as a static
+ * constant instead of going through the runtime resolver.
+ */
+export const MetaMaskPopupUrls = {
   /** Fragment matched against a popup tab URL to recognise the Connect popup. */
   connectPopupFragment: '/notification.html#/connect/',
   /** Fragment matched against a popup tab URL to recognise the signature-request popup. */
@@ -34,28 +88,6 @@ export const MetaMaskTestIds = {
   disconnectButton: 'disconnect-site-button',
   /** Confirm "Disconnect" in the modal. */
   disconnectConfirmButton: 'disconnect-all-modal-confirm-button',
-} as const;
-
-/**
- * Role+name locators used inside the Connect popup when the test drives
- * the popup directly (e.g. rejection path). Dappwright's `approve()` /
- * `reject()` also use these conceptually — keeping them here means the
- * test-writer uses the same strings when falling back to manual popup
- * control.
- */
-export const MetaMaskConnectPopup = {
-  cancelButtonName: 'Cancel',
-  connectButtonName: 'Connect',
-} as const;
-
-/**
- * Role+name fallback for the signature-request popup. MetaMask's newer
- * popup layout lost the `confirm-btn` testid Dappwright 2.9.2 hardcodes
- * in `approve()` / `sign()`; role+name is a stable alternative.
- */
-export const MetaMaskSignaturePopup = {
-  cancelButtonName: 'Cancel',
-  signButtonName: 'Confirm',
 } as const;
 
 /**

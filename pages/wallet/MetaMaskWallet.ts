@@ -8,7 +8,7 @@ import dappwright, {
 import { Logger } from '../../features/support/logger.ts';
 import {
   MetaMaskPopupButtonTestIds,
-  MetaMaskUrls,
+  MetaMaskPopupUrls,
 } from '../../features/support/metamask-selectors.ts';
 import { programmaticallyRevokePermissions } from '../../features/support/wallet-reconciler.ts';
 
@@ -82,6 +82,23 @@ export class MetaMaskWallet {
   }
 
   /**
+   * The Chrome-assigned extension ID for this MetaMask install. Read off
+   * the wallet's home page URL — Dappwright installs MetaMask unpacked,
+   * so the ID is random per install and differs from the Web Store ID.
+   * Every URL builder in `metamask-selectors.ts` consumes this.
+   */
+  get extensionId(): string {
+    const url = this.dappwright.page.url();
+    const match = url.match(/^chrome-extension:\/\/([a-p]{32})\//);
+    if (!match) {
+      throw new Error(
+        `MetaMaskWallet.extensionId: expected the wallet page URL to start with chrome-extension://<32-char-id>/ but saw "${url}"`,
+      );
+    }
+    return match[1];
+  }
+
+  /**
    * Approves the pending `eth_requestAccounts` (Connect) popup. Dappwright
    * 2.9.2's `approve()` targets the legacy testid `confirm-btn` which is
    * missing from the MM popup layout used by MetaMask 13.17.0 in this
@@ -91,7 +108,7 @@ export class MetaMaskWallet {
    */
   async approveConnection(): Promise<void> {
     logger.info('approving MetaMask connect popup');
-    await this.clickPopupButton(MetaMaskUrls.connectPopupFragment, 'confirm');
+    await this.clickPopupButton(MetaMaskPopupUrls.connectPopupFragment, 'confirm');
   }
 
   /**
@@ -101,7 +118,7 @@ export class MetaMaskWallet {
    */
   async signMessage(): Promise<void> {
     logger.info('signing MetaMask signature-request popup');
-    await this.clickPopupButton(MetaMaskUrls.signaturePopupFragment, 'confirm');
+    await this.clickPopupButton(MetaMaskPopupUrls.signaturePopupFragment, 'confirm');
   }
 
   /**
@@ -169,7 +186,7 @@ export class MetaMaskWallet {
    */
   async rejectConnection(): Promise<void> {
     logger.info('rejecting MetaMask connect popup');
-    await this.clickPopupButton(MetaMaskUrls.connectPopupFragment, 'cancel');
+    await this.clickPopupButton(MetaMaskPopupUrls.connectPopupFragment, 'cancel');
   }
 
   /**

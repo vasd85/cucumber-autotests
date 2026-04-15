@@ -1,7 +1,11 @@
 import type { BrowserContext, Page } from 'playwright-core';
 
 import { Logger } from './logger.ts';
-import { METAMASK_EXTENSION_ID, MetaMaskTestIds, MetaMaskUrls } from './metamask-selectors.ts';
+import {
+  getMetaMaskHomeUrl,
+  getMetaMaskOriginPrefix,
+  MetaMaskTestIds,
+} from './metamask-selectors.ts';
 import type { WalletStateConfig } from './wallet-state.ts';
 
 const logger = new Logger('wallet-reconciler');
@@ -40,28 +44,46 @@ export async function applyWalletState(
 }
 
 /**
- * Fast programmatic revoke, falling back to the MetaMask UI Sites screen
- * if the fast path throws. Both failures are logged loud; the scenario is
- * allowed to continue because a stale permission is not fatal in all
- * cases — but the scenario's own assertions will fail if it mattered.
+ * Programmatic-first, UI-fallback revoke.
+ *
+ * MetaMask's MV3 service worker runs under LavaMoat scuttling, which
+ * strips `globalThis` properties (e.g. `setInterval`, `Intl`) that
+ * Playwright's `worker.evaluate` marshalling needs. In practice the
+ * fast path always throws against MetaMask today — the UI fallback is
+ * the path that actually runs. The programmatic attempt stays here as
+ * a zero-cost seam for wallets without scuttling and for a future
+ * MetaMask that relaxes it; failures log at `debug` only. The UI
+ * fallback's failure is where we shout: that is the path we rely on.
  */
 async function revokePermissions(context: BrowserContext, origin: string): Promise<void> {
   try {
     await programmaticallyRevokePermissions(context, origin);
     return;
   } catch (err) {
-    logger.warn('programmatic revoke failed for %s, falling back to UI path: %o', origin, err);
+    logger.debug(
+      'programmatic revoke unavailable for %s (expected under LavaMoat scuttling): %s',
+      origin,
+      errorMessage(err),
+    );
   }
 
   try {
     await uiRevokePermissions(context, origin);
   } catch (err) {
-    logger.error(
-      'UI fallback revoke also failed for %s — continuing, scenario will fail if stale permissions matter: %o',
+    logger.warn(
+      'UI fallback revoke failed for %s — continuing, scenario may fail if stale permissions matter: %s',
       origin,
-      err,
+      errorMessage(err),
     );
   }
+}
+
+/** Extracts `.message` off an unknown thrown value without dumping the full stack. */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
 }
 
 /**
@@ -120,7 +142,7 @@ export async function programmaticallyRevokePermissions(
 async function uiRevokePermissions(context: BrowserContext, origin: string): Promise<void> {
   const settingsPage = await context.newPage();
   try {
-    await settingsPage.goto(MetaMaskUrls.permissions);
+    await settingsPage.goto(getMetaMaskHomeUrl('permissions'));
 
     const row = settingsPage.getByTestId(MetaMaskTestIds.connectedOriginRow(origin));
     if ((await row.count()) === 0) {
@@ -167,9 +189,8 @@ async function clearDappStorage(page: Page): Promise<void> {
 }
 
 async function getMetaMaskServiceWorker(context: BrowserContext) {
-  const workers = context.serviceWorkers();
-  const prefix = `chrome-extension://${METAMASK_EXTENSION_ID}`;
-  const existing = workers.find((sw) => sw.url().startsWith(prefix));
+  const prefix = getMetaMaskOriginPrefix();
+  const existing = context.serviceWorkers().find((sw) => sw.url().startsWith(prefix));
   if (existing) {
     return existing;
   }
