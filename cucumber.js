@@ -1,20 +1,15 @@
-// The browser-session singleton in features/support/browser-session.ts is
-// per-process. Each Cucumber parallel worker would bootstrap its own
-// MetaMask instance (~10s each) and — more importantly — share nothing
-// with other workers. For this iteration we intentionally run in a single
-// worker. Lift `parallel` once the reconciler handles cross-worker
-// coordination (profile pooling via launchPersistentContext, etc.).
+// Single-worker: each parallel worker would bootstrap its own MetaMask
+// (~10s) and share nothing with the others. Revisit if the suite grows
+// enough to need launchPersistentContext pooling.
 //
-// ESM note: with package.json `type: "module"`, Cucumber reads this file
-// via `await import(...)` and uses the module's default export as the
-// default profile directly — do NOT wrap the object in `{ default: {...} }`
-// or the profile keys end up one level too deep and silently unused
-// (Cucumber 11.3 on Node 24).
+// Do NOT wrap the profile in `{ default: {...} }`. With `type: "module"`
+// Cucumber reads this file via `await import(...)` and treats the module's
+// default export as the profile directly — an inner `default` key pushes
+// the config one level too deep and is silently dropped.
 //
-// TypeScript loader note: Node 20+ removed the old `--loader` hook that
-// Cucumber's `loader: []` config key uses. tsx must be registered via
-// `NODE_OPTIONS='--import tsx/esm'` at process start — see the `test` /
-// `test:smoke` scripts in package.json.
+// tsx registration is `NODE_OPTIONS='--import tsx/esm'` in the npm scripts,
+// not the `loader: ['tsx/esm']` config key, because Node 20+ removed the
+// `--loader` hook that config key invokes.
 export default {
   paths: ['features/**/*.feature'],
   import: ['features/step-definitions/**/*.ts', 'features/support/**/*.ts'],

@@ -18,12 +18,7 @@ let session: SessionRefs | null = null;
 
 /**
  * Bootstraps Dappwright + MetaMask exactly once per process. Called from
- * `BeforeAll`. Subsequent calls are a no-op — per-scenario refs come from
- * `getSession()`.
- *
- * The MetaMask version is pinned by env (`METAMASK_VERSION`) when set, or
- * falls back to Dappwright's `MetaMaskWallet.recommendedVersion` — resolved
- * inside `MetaMaskWallet.bootstrap`, not hardcoded.
+ * `BeforeAll`; subsequent calls are a no-op.
  */
 export async function initSession(): Promise<SessionRefs> {
   if (session) {
@@ -38,9 +33,6 @@ export async function initSession(): Promise<SessionRefs> {
     headless: env.headless,
   });
 
-  // The extension ID is assigned by Chromium at install time — the
-  // reconciler and selector helpers need it to build chrome-extension://
-  // URLs and match MM service workers. Register it exactly once here.
   initMetaMaskExtensionId(refs.metaMask.extensionId);
 
   session = refs;
@@ -48,11 +40,6 @@ export async function initSession(): Promise<SessionRefs> {
   return session;
 }
 
-/**
- * Returns the singleton session. Throws if `initSession()` has not run —
- * this means a scenario's `Before` hook is firing before `BeforeAll`,
- * which is a wiring bug.
- */
 export function getSession(): SessionRefs {
   if (!session) {
     throw new Error('Session not initialised. initSession() must run in BeforeAll.');
@@ -60,10 +47,6 @@ export function getSession(): SessionRefs {
   return session;
 }
 
-/**
- * Closes the singleton context and releases the reference. Called from
- * `AfterAll`.
- */
 export async function destroySession(): Promise<void> {
   if (!session) {
     return;

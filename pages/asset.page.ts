@@ -4,15 +4,11 @@ import type { Locator, Page } from 'playwright-core';
  * TradeGenius `/asset` landing page and its own two-step Sign-In funnel:
  *
  *   [header Sign In] → [dialog: "Sign in or create an account"]
- *                    → [button: "Connect with Wallet"] → hands off to Reown AppKit
+ *                    → [button: "Connect with Wallet"] → Reown AppKit modal
  *
  * The Reown modal that opens after `Connect with Wallet` is owned by
- * `WalletConnectModalPage` (separate POM) because it is a self-contained
- * third-party web component with its own shadow-DOM / testid surface.
- *
- * TradeGenius exposes no `data-testid` / `data-qa` on its own UI
- * (see exploration report), so locators here rely on role + accessible
- * name — the only stable option.
+ * `WalletConnectModalPage`. TradeGenius exposes no `data-testid` / `data-qa`
+ * on its own UI, so locators rely on role + accessible name.
  */
 export class AssetPage {
   readonly page: Page;
@@ -23,13 +19,9 @@ export class AssetPage {
 
   constructor(page: Page) {
     this.page = page;
-    // Role + accessible name: no data-testid on TradeGenius-owned UI.
     this.signInButton = page.getByRole('button', { name: 'Sign In' });
-    // The dialog's `aria-labelledby` points to a title node that does not
-    // render a clean accessible name ({ name: '...' } misses it at runtime
-    // even though the title is in the DOM). Anchoring by visible title text
-    // is the stable alternative — still precise, and keeps the Reown
-    // `<w3m-modal>` (a different dialog) from matching.
+    // The dialog's `aria-labelledby` does not resolve to a clean accessible
+    // name through Playwright — anchor by visible title text instead.
     this.signInDialog = page
       .getByRole('dialog')
       .filter({ hasText: 'Sign in or create an account' });
@@ -47,10 +39,9 @@ export class AssetPage {
   }
 
   /**
-   * Reads the small set of client-storage keys that indicate a live wallet
-   * session. Bundled in a single `page.evaluate` so the three reads happen
-   * under one microtask — preventing a race where `@appkit/connection_status`
-   * has flipped but `@turnkey/session/v2` has not yet been written.
+   * All three reads happen under one microtask so the poll cannot catch a
+   * state where `@appkit/connection_status` has flipped but the connector
+   * or Turnkey fields have not yet been written.
    */
   async readSessionStorageSnapshot(): Promise<SessionStorageSnapshot> {
     return this.page.evaluate(() => ({
