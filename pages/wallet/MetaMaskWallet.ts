@@ -30,13 +30,9 @@ export interface MetaMaskBootstrapResult {
  */
 export class MetaMaskWallet {
   private readonly dappwright: Dappwright;
-  private readonly page: Page;
-  private readonly context: BrowserContext;
 
-  constructor(dappwrightHandle: Dappwright, page: Page, context: BrowserContext) {
+  constructor(dappwrightHandle: Dappwright) {
     this.dappwright = dappwrightHandle;
-    this.page = page;
-    this.context = context;
   }
 
   static async bootstrap(options: MetaMaskBootstrapOptions): Promise<MetaMaskBootstrapResult> {
@@ -54,7 +50,7 @@ export class MetaMaskWallet {
       headless: options.headless ?? false,
     });
 
-    return { context, page, metaMask: new MetaMaskWallet(wallet, page, context) };
+    return { context, page, metaMask: new MetaMaskWallet(wallet) };
   }
 
   get raw(): Dappwright {
