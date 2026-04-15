@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+
+# IDE
+.vscode
+.idea
+
+# OS
+**/.DS_Store
+
+# Reports and artifacts
+/reports
+/screenshots
+/test-results
+/playwright-report
+
+# Cache
+.dappwright
+.auth
+.playwright-mcp
+
+# Claude Code scratchpads (context passing between e2e-test-builder agents)
+.claude/scratchpads/
+
+# Claude Code worktrees (subagent isolation for parallel runs)
+.claude/worktrees/
+
+# Local-only Claude Code notes (private, not for sharing)
+CLAUDE.local.md
+
+# Local Claude Code settings (MCP profile paths, secrets — do not commit)
+.claude/settings.local.json
+
+# Env
+.env
+.env.local
