@@ -8,9 +8,7 @@ import type { CustomWorld } from '../support/world.ts';
 
 const logger = new Logger('asset.steps');
 
-const APPKIT_STATUS_CONNECTED = 'connected';
-const APPKIT_CONNECTOR_METAMASK = 'io.metamask';
-const CONNECTION_STATUS_POLL_TIMEOUT_MS = 10_000;
+const SIGNED_IN_TIMEOUT_MS = 20_000;
 
 Given(
   'the user is on the TradeGenius Asset page',
@@ -32,25 +30,27 @@ Then(
   async function (this: CustomWorld): Promise<void> {
     const asset = new AssetPage(this.page);
 
-    await expect
-      .poll(async () => (await asset.readSessionStorageSnapshot()).appkitStatus, {
-        timeout: CONNECTION_STATUS_POLL_TIMEOUT_MS,
-        message: 'waiting for @appkit/connection_status to flip to "connected"',
-      })
-      .toBe(APPKIT_STATUS_CONNECTED);
+    // The ToS 1/2 dialog flashes briefly for already-onboarded wallets.
+    // Best-effort wait so the header-swap assertions do not race its mount.
+    await asset.waitForTermsOfServiceToDismiss();
 
-    const snapshot = await asset.readSessionStorageSnapshot();
-    logger.info(
-      'signed-in snapshot: appkitStatus=%s connectorId=%s turnkeySession=%s',
-      snapshot.appkitStatus,
-      snapshot.connectorId,
-      snapshot.turnkeySession ? '<present>' : '<missing>',
+    // UI is the source of truth: the Sign-In button disappears when the
+    // Turnkey session is established, and Deposit + Airdrop take over the
+    // same header slot.
+    await expect(asset.signInButton).toBeHidden({ timeout: SIGNED_IN_TIMEOUT_MS });
+    await expect(asset.depositButton).toBeVisible();
+    await expect(asset.airdropLink).toBeVisible();
+
+    // Supplementary diagnostic only — the backend write of
+    // `@turnkey/session/v2` can lag the UI flip by a few seconds, so its
+    // absence is not gating.
+    const turnkeySession = await this.page.evaluate(() =>
+      localStorage.getItem('@turnkey/session/v2'),
     );
-    expect(snapshot.appkitStatus).toBe(APPKIT_STATUS_CONNECTED);
-    expect(snapshot.connectorId).toBe(APPKIT_CONNECTOR_METAMASK);
-    // `@turnkey/session/v2` populates after the dApp hits
-    // `POST /api/auth/turnkey-session-update`; a cold backend can take
-    // 10-20s, so we log its presence but do not gate the assertion on it.
+    const turnkeyDiagnostic = turnkeySession
+      ? `<present: ${turnkeySession.slice(0, 16)}…>`
+      : '<missing>';
+    logger.info('signed-in diagnostic: turnkeySession=%s', turnkeyDiagnostic);
   },
 );
 
@@ -58,7 +58,8 @@ Then('the user is not signed in', async function (this: CustomWorld): Promise<vo
   const asset = new AssetPage(this.page);
   const walletConnectModal = new WalletConnectModalPage(this.page);
 
-  const status = await asset.readAppkitConnectionStatus();
-  expect(status).not.toBe(APPKIT_STATUS_CONNECTED);
+  // Cancelling the MetaMask popup at stage 1 keeps the Reown modal mounted
+  // and the Sign-In button visible in the dApp header.
   await expect(walletConnectModal.modalCard).toBeVisible();
+  await expect(asset.signInButton).toBeVisible();
 });

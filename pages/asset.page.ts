@@ -17,6 +17,11 @@ export class AssetPage {
   readonly signInDialog: Locator;
   readonly connectWithWalletButton: Locator;
 
+  readonly depositButton: Locator;
+  readonly airdropLink: Locator;
+  readonly termsOfServiceDialog: Locator;
+  readonly termsOfServiceAccept: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.signInButton = page.getByRole('button', { name: 'Sign In' });
@@ -27,6 +32,19 @@ export class AssetPage {
       .filter({ hasText: 'Sign in or create an account' });
     this.connectWithWalletButton = this.signInDialog.getByRole('button', {
       name: 'Connect with Wallet',
+    });
+
+    // Post-login header controls: occupy the same slot that held `Sign In`
+    // before the Turnkey session was issued.
+    this.depositButton = page.getByRole('button', { name: 'Deposit' });
+    this.airdropLink = page.getByRole('link', { name: 'Airdrop' });
+
+    // Transient Terms-of-Service 1/2 dialog that flashes briefly on the
+    // first /asset render after a signature. Auto-dismisses for wallets
+    // that have already accepted the ToS on a previous run.
+    this.termsOfServiceDialog = page.getByRole('dialog').filter({ hasText: 'Terms of Service' });
+    this.termsOfServiceAccept = this.termsOfServiceDialog.getByRole('button', {
+      name: 'I Accept',
     });
   }
 
@@ -39,25 +57,20 @@ export class AssetPage {
   }
 
   /**
-   * All three reads happen under one microtask so the poll cannot catch a
-   * state where `@appkit/connection_status` has flipped but the connector
-   * or Turnkey fields have not yet been written.
+   * Best-effort dismissal of the Terms-of-Service 1/2 dialog that flashes
+   * briefly on the first `/asset` render after a signature. For an already-
+   * onboarded wallet the dialog auto-dismisses within ~2s; this method waits
+   * up to `timeoutMs` for the hidden state, then returns. If the dialog
+   * never mounted, the call returns immediately.
+   *
+   * Does not throw — callers assert the post-login UI themselves.
    */
-  async readSessionStorageSnapshot(): Promise<SessionStorageSnapshot> {
-    return this.page.evaluate(() => ({
-      appkitStatus: localStorage.getItem('@appkit/connection_status'),
-      turnkeySession: localStorage.getItem('@turnkey/session/v2'),
-      connectorId: localStorage.getItem('@appkit/eip155:connected_connector_id'),
-    }));
+  async waitForTermsOfServiceToDismiss(timeoutMs = 8_000): Promise<void> {
+    try {
+      await this.termsOfServiceDialog.waitFor({ state: 'hidden', timeout: timeoutMs });
+    } catch {
+      // Dialog stayed mounted or never rendered. Let the caller's UI
+      // assertion surface the actual problem.
+    }
   }
-
-  async readAppkitConnectionStatus(): Promise<string | null> {
-    return this.page.evaluate(() => localStorage.getItem('@appkit/connection_status'));
-  }
-}
-
-export interface SessionStorageSnapshot {
-  appkitStatus: string | null;
-  turnkeySession: string | null;
-  connectorId: string | null;
 }
