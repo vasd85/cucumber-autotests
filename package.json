@@ -1,0 +1,30 @@
+{
+  "name": "cucumber-autotests",
+  "version": "0.1.0",
+  "description": "Cucumber BDD E2E tests for the TradeGenius Asset platform",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "cucumber-js",
+    "test:smoke": "cucumber-js --tags @smoke",
+    "browsers:install": "playwright install chromium",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.2.0",
+    "@playwright/test": "^1.48.2",
+    "@tenkeylabs/dappwright": "^2.9.2",
+    "@types/node": "^20.14.2",
+    "@typescript-eslint/eslint-plugin": "^8.10.0",
+    "@typescript-eslint/parser": "^8.10.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "ethers": "^6.15.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.4.5"
+  }
+}
