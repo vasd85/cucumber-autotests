@@ -87,11 +87,35 @@ export class MetaMaskWallet {
   }
 
   async signMessage(): Promise<void> {
-    // Same helper, second invocation — picks up the signature popup after the
-    // connect popup closes. "Connect this website" is absent, so the stage-1
-    // branch is skipped and the sole confirm-footer-button click signs.
-    logger.info('confirming MetaMask signature popup via Dappwright.signin()');
-    await this.dappwright.signin();
+    logger.info('confirming MetaMask signature popup');
+
+    const context = this.dappwright.page.context();
+    const isSignaturePopup = (p: Page): boolean =>
+      p.url().startsWith('chrome-extension://') &&
+      p.url().includes('/notification.html#/confirm-transaction/');
+
+    // The signature popup frequently opens during the 3s waitForChromeState
+    // settle inside the prior signin() call, so by the time we land here it
+    // is already present in context.pages(). Check existing pages first, then
+    // fall back to the next `page` event. Playwright's waitForEvent does not
+    // replay past events, so relying on it alone races the popup open.
+    const popup =
+      context.pages().find(isSignaturePopup) ??
+      (await context.waitForEvent('page', {
+        predicate: isSignaturePopup,
+        timeout: 20_000,
+      }));
+
+    await popup.waitForLoadState('domcontentloaded');
+
+    const confirm = popup.getByTestId('confirm-footer-button');
+    await confirm.waitFor({ state: 'visible', timeout: 10_000 });
+    await confirm.click();
+
+    if (!popup.isClosed()) {
+      await popup.waitForEvent('close', { timeout: 15_000 });
+    }
+    logger.info('MetaMask signature popup closed');
   }
 
   async rejectConnection(): Promise<void> {
