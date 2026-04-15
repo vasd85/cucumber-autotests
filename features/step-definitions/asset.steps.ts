@@ -34,6 +34,11 @@ Then(
     // Best-effort wait so the header-swap assertions do not race its mount.
     await asset.waitForTermsOfServiceToDismiss();
 
+    // The "Set up your Security" 2FA onboarding modal overlays the header
+    // on every fresh sign-in and `aria-hidden`s the post-login nav below.
+    // Skip it best-effort so the Deposit/Airdrop assertions can see the UI.
+    await asset.dismissTwoFactorSetupIfPresent();
+
     // UI is the source of truth: the Sign-In button disappears when the
     // Turnkey session is established, and Deposit + Airdrop take over the
     // same header slot.
