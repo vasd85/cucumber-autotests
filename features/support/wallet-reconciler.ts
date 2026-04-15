@@ -23,7 +23,7 @@ export async function applyWalletState(
   }
 
   if (config.clearDappStorage) {
-    await clearDappStorage(page);
+    await clearDappStorage(context, page);
   }
 }
 
@@ -55,7 +55,20 @@ async function revokePermissions(context: BrowserContext, origin: string): Promi
   }
 }
 
-async function clearDappStorage(page: Page): Promise<void> {
+async function clearDappStorage(context: BrowserContext, page: Page): Promise<void> {
+  // Killing HttpOnly + Secure cookies must happen before any subsequent
+  // navigation so the next page load starts unauthenticated. document.cookie
+  // cannot touch HttpOnly cookies; only the DevTools Protocol round-trip via
+  // context.clearCookies() can.
+  try {
+    await context.clearCookies();
+  } catch (err) {
+    logger.warn(
+      'context.clearCookies failed: %s',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   await page.evaluate(() => {
     try {
       localStorage.clear();
@@ -75,5 +88,35 @@ async function clearDappStorage(page: Page): Promise<void> {
       }
     }
   });
+
+  // Turnkey stores session state under `@turnkey/client = "indexed-db"`, so
+  // localStorage.clear() does not touch it. Drop every IndexedDB database on
+  // the dApp origin. Guarded: indexedDB.databases() is Chromium-only and may
+  // list entries without a `name`, and deletion is best-effort — a failure
+  // must not fail the whole reconcile.
+  try {
+    await page.evaluate(async () => {
+      if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') {
+        return;
+      }
+      const databases = await indexedDB.databases();
+      await Promise.all(
+        databases.map((db) => {
+          if (!db.name) {
+            return Promise.resolve();
+          }
+          return new Promise<void>((resolve) => {
+            const request = indexedDB.deleteDatabase(db.name!);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          });
+        }),
+      );
+    });
+  } catch (err) {
+    logger.warn('IndexedDB wipe failed: %s', err instanceof Error ? err.message : String(err));
+  }
+
   logger.debug('cleared dApp storage');
 }
