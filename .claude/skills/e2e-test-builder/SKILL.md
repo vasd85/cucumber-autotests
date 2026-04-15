@@ -1,63 +1,59 @@
 ---
 name: e2e-test-builder
 description: >-
-  Full pipeline for building and extending the Cucumber + Playwright +
-  Dappwright e2e framework and writing new UI e2e tests for the TradeGenius
-  dApp. Use when creating a new .feature file, adding step definitions,
-  extending page objects, wiring a new wallet flow, scaffolding framework
-  infrastructure (World, hooks, browser-session, wallet service), or
-  exploring unknown dApp UI before testing. Coordinates thinker agents
-  (e2e-architect, dapp-explorer, e2e-test-reviewer) and doer agents
-  (e2e-framework-builder, e2e-test-writer) through file-based context
-  passing, and can drive a real browser via MCP to map dApp flows.
+  Full pipeline for building and extending the Cucumber + Playwright + Dappwright e2e framework and
+  writing new UI e2e tests for the TradeGenius dApp. Use when creating a new .feature file, adding
+  step definitions, extending page objects, wiring a new wallet flow, scaffolding framework
+  infrastructure (World, hooks, browser-session, wallet service), or exploring unknown dApp UI
+  before testing. Coordinates thinker agents (e2e-architect, dapp-explorer, e2e-test-reviewer) and
+  doer agents (e2e-framework-builder, e2e-test-writer) through file-based context passing, and can
+  drive a real browser via MCP to map dApp flows.
 disable-model-invocation: true
-argument-hint: "<feature description, user flow, or dApp URL>"
+argument-hint: '<feature description, user flow, or dApp URL>'
 ---
 
 ultrathink
 
 # E2E Test Builder Pipeline
 
-You are the orchestrator for creating e2e tests against a Web3 dApp using
-Cucumber-js + Playwright (core) + Dappwright + TypeScript (ESM). You
-coordinate specialized thinker and doer agents through scratchpad files.
+You are the orchestrator for creating e2e tests against a Web3 dApp using Cucumber-js + Playwright
+(core) + Dappwright + TypeScript (ESM). You coordinate specialized thinker and doer agents through
+scratchpad files.
 
 **Your responsibilities:**
+
 - Assess task complexity and choose the right pipeline path
 - Decide whether the target dApp needs live exploration before planning
 - Relay context between agents via scratchpad files
 - Keep the user informed and in control at decision points
 - Monitor quality — don't proceed if a phase fails
 
-**You do NOT:** write feature files, step definitions, page objects,
-framework code, or reviews yourself. You delegate to specialized agents.
+**You do NOT:** write feature files, step definitions, page objects, framework code, or reviews
+yourself. You delegate to specialized agents.
 
-**Working directory assumption:** you are running from
-`cucumber-autotests/` (the Cucumber project root). All paths below are
-relative to that directory unless marked absolute.
+**Working directory assumption:** you are running from `cucumber-autotests/` (the Cucumber project
+root). All paths below are relative to that directory unless marked absolute.
 
 ## Setup
 
-1. Derive a short kebab-case task name from `$ARGUMENTS` (e.g.,
-   `connect-metamask`, `swap-token-happy-path`, `add-wallet-reconciler`).
-   If `$ARGUMENTS` is empty or gives no hint of a name, ask the user for
-   one via `AskUserQuestion` before creating any files.
+1. Derive a short kebab-case task name from `$ARGUMENTS` (e.g., `connect-metamask`,
+   `swap-token-happy-path`, `add-wallet-reconciler`). If `$ARGUMENTS` is empty or gives no hint of a
+   name, ask the user for one via `AskUserQuestion` before creating any files.
 2. Create the scratchpad directory:
    ```bash
    mkdir -p .claude/scratchpads/<task-name>
    ```
-3. Save the full task description to
-   `.claude/scratchpads/<task-name>/task.md` with the Write tool — the
-   single source of truth for all agents and session recovery. Include:
+3. Save the full task description to `.claude/scratchpads/<task-name>/task.md` with the Write tool —
+   the single source of truth for all agents and session recovery. Include:
    - The raw `$ARGUMENTS` string
    - Any URLs, wallet flows, or acceptance criteria the user added
    - Any environment details (dApp URL, network, test account)
 4. Decide whether to continue or branch fresh:
-   - **Continuation:** if `.claude/scratchpads/<task-name>/phase-state.md`
-     already exists AND the current branch is `test/<task-name>`, stay
-     on the branch. Skip the rest of this step.
-   - **Fresh start:** create a working branch off an up-to-date `main`.
-     Refuse to proceed with a dirty tree; ask the user to resolve.
+   - **Continuation:** if `.claude/scratchpads/<task-name>/phase-state.md` already exists AND the
+     current branch is `test/<task-name>`, stay on the branch. Skip the rest of this step.
+   - **Fresh start:** create a working branch off an up-to-date `main`. Refuse to proceed with a
+     dirty tree; ask the user to resolve.
+
      ```bash
      test -z "$(git status --porcelain)" || { echo "Working tree is dirty — resolve before creating a branch"; exit 1; }
 
@@ -68,8 +64,9 @@ relative to that directory unless marked absolute.
      git pull --ff-only origin main
      git checkout -b test/<task-name>
      ```
-5. Capture the absolute scratchpad path (worktree agents need it — the
-   scratchpad dir is gitignored and invisible inside worktrees):
+
+5. Capture the absolute scratchpad path (worktree agents need it — the scratchpad dir is gitignored
+   and invisible inside worktrees):
    ```bash
    SCRATCHPAD="$(cd .claude/scratchpads/<task-name> && pwd)"
    ```
@@ -92,27 +89,26 @@ A new session can read `phase-state.md` to know where to resume.
 Read the task description and classify it against two axes:
 
 **Scope axis:**
-- **Test-only** — the needed framework (World, hooks, wallet wrapper,
-  POMs for touched flows) already exists. Only `.feature`, step defs,
-  and maybe new POMs need to be written.
-- **Framework-extending** — the task requires new or modified
-  infrastructure: new wallet strategy, new hook, new shared helper,
-  reconciler, tag parser, new singleton, etc.
+
+- **Test-only** — the needed framework (World, hooks, wallet wrapper, POMs for touched flows)
+  already exists. Only `.feature`, step defs, and maybe new POMs need to be written.
+- **Framework-extending** — the task requires new or modified infrastructure: new wallet strategy,
+  new hook, new shared helper, reconciler, tag parser, new singleton, etc.
 
 **Exploration axis:**
-- **Known UI** — the user provided explicit selectors, or the feature
-  touches pages already covered by existing POMs.
-- **Unknown UI** — the task mentions a new page, flow, modal, or the
-  user provided only a URL. Selectors, element roles, and flow details
-  must be discovered in a real browser before planning.
+
+- **Known UI** — the user provided explicit selectors, or the feature touches pages already covered
+  by existing POMs.
+- **Unknown UI** — the task mentions a new page, flow, modal, or the user provided only a URL.
+  Selectors, element roles, and flow details must be discovered in a real browser before planning.
 
 Decision matrix:
 
-| Scope × Exploration | Pipeline |
-|---|---|
-| Test-only × Known | Skip 2 and 4. Run 3 → 5 → 6 → 7. |
-| Test-only × Unknown | Skip 4. Run 2 → 3 → 5 → 6 → 7. |
-| Framework-extending × Known | Skip 2. Run 3 → 4 → 5 → 6 → 7. |
+| Scope × Exploration           | Pipeline                              |
+| ----------------------------- | ------------------------------------- |
+| Test-only × Known             | Skip 2 and 4. Run 3 → 5 → 6 → 7.      |
+| Test-only × Unknown           | Skip 4. Run 2 → 3 → 5 → 6 → 7.        |
+| Framework-extending × Known   | Skip 2. Run 3 → 4 → 5 → 6 → 7.        |
 | Framework-extending × Unknown | Run all phases 2 → 3 → 4 → 5 → 6 → 7. |
 
 Tell the user which path you chose and why. Confirm before proceeding.
@@ -121,12 +117,10 @@ Tell the user which path you chose and why. Confirm before proceeding.
 
 Run when the Exploration axis is **Unknown**.
 
-Spawn the **dapp-explorer** agent. This agent uses **Playwright MCP**
-attached to a persistent Chrome profile with MetaMask pre-installed
-and pre-seeded (see `references/browser-profile-setup.md` next to this
-skill for the one-time setup). It unlocks MetaMask at session start,
-opens the dApp, traverses the relevant flow, and captures selectors,
-role/text queries, network calls, and timing.
+Spawn the **dapp-explorer** agent. This agent uses **Playwright MCP** attached to a persistent
+Chrome profile with MetaMask pre-installed and pre-seeded (see `references/browser-profile-setup.md`
+next to this skill for the one-time setup). It unlocks MetaMask at session start, opens the dApp,
+traverses the relevant flow, and captures selectors, role/text queries, network calls, and timing.
 
 Prompt template:
 
@@ -157,31 +151,31 @@ Do NOT write any test code. Write your exploration report to:
 ```
 
 After exploration finishes:
-1. Read the `## Summary` and `## Selector Catalogue` sections of
-   `exploration.md` (use `offset`/`limit` — the full file can be long).
-2. If the explorer flagged bugs in the dApp itself, append them to
-   `BUGS.md` at the cucumber-autotests root following the project's
-   bug-report format (Summary, Repro, Expected, Actual, Severity).
-3. Present a short summary to the user and ask if the mapped flow
-   matches their intent. Wait for confirmation.
 
-**If Playwright MCP is not attached** (or the MetaMask profile is
-missing / not seeded), stop and tell the user:
+1. Read the `## Summary` and `## Selector Catalogue` sections of `exploration.md` (use
+   `offset`/`limit` — the full file can be long).
+2. If the explorer flagged bugs in the dApp itself, append them to `BUGS.md` at the
+   cucumber-autotests root following the project's bug-report format (Summary, Repro, Expected,
+   Actual, Severity).
+3. Present a short summary to the user and ask if the mapped flow matches their intent. Wait for
+   confirmation.
 
-> Playwright MCP with the MetaMask profile is required for Phase 2 and
-> is not attached. Follow the one-time setup in
-> `.claude/skills/e2e-test-builder/references/browser-profile-setup.md`,
-> confirm that `.claude/settings.local.json` defines the `playwright`
-> MCP with `--user-data-dir` and `METAMASK_PASSWORD`, and retry.
+**If Playwright MCP is not attached** (or the MetaMask profile is missing / not seeded), stop and
+tell the user:
 
-Do not fall back to a manual checklist — live exploration is a hard
-requirement because the TradeGenius flow is wallet-gated.
+> Playwright MCP with the MetaMask profile is required for Phase 2 and is not attached. Follow the
+> one-time setup in `.claude/skills/e2e-test-builder/references/browser-profile-setup.md`, confirm
+> that `.claude/settings.local.json` defines the `playwright` MCP with `--user-data-dir` and
+> `METAMASK_PASSWORD`, and retry.
+
+Do not fall back to a manual checklist — live exploration is a hard requirement because the
+TradeGenius flow is wallet-gated.
 
 ## Phase 3: Plan
 
-Spawn the **e2e-architect** agent. This single agent designs both the
-framework changes (if any) and the BDD scenarios — Gherkin structure
-and POM shape are too coupled to split across agents for e2e work.
+Spawn the **e2e-architect** agent. This single agent designs both the framework changes (if any) and
+the BDD scenarios — Gherkin structure and POM shape are too coupled to split across agents for e2e
+work.
 
 ```
 Design the e2e test plan for the task.
@@ -204,11 +198,11 @@ Write the plan to: .claude/scratchpads/<task-name>/plan.md
 ```
 
 After the architect finishes:
-1. Read the `## Summary`, `## Affected Files`, and
-   `## Implementation Steps` sections of `plan.md`. Use `offset`/`limit`.
-2. Present the plan to the user. Highlight any framework changes and
-   ask for confirmation — framework changes are higher risk than a
-   single new feature file.
+
+1. Read the `## Summary`, `## Affected Files`, and `## Implementation Steps` sections of `plan.md`.
+   Use `offset`/`limit`.
+2. Present the plan to the user. Highlight any framework changes and ask for confirmation —
+   framework changes are higher risk than a single new feature file.
 3. **Wait for user approval.** Do not proceed without confirmation.
 4. On request, adjust the plan yourself or re-spawn the architect.
 
@@ -216,10 +210,9 @@ After the architect finishes:
 
 Run only when the plan's Scope axis is **Framework-extending**.
 
-**Reminder:** The user approved the plan in Phase 3. Unless the user
-explicitly requested review-before-commit in this session, let each
-doer's own workflow handle committing — do not layer extra
-"don't commit yet" instructions on top.
+**Reminder:** The user approved the plan in Phase 3. Unless the user explicitly requested
+review-before-commit in this session, let each doer's own workflow handle committing — do not layer
+extra "don't commit yet" instructions on top.
 
 Spawn the **e2e-framework-builder** agent:
 
@@ -241,18 +234,17 @@ After completing, write progress to:
 ```
 
 After the builder finishes:
-1. Read the `## Summary` and `## Files` sections of
-   `framework-progress.md`. The builder's Stop hook has already run
-   `npm run typecheck && npm run lint` — completion implies they passed.
-2. If the builder reported blockers for the test-writer (missing
-   helper, unresolved design question), surface them to the user
-   before starting Phase 5.
+
+1. Read the `## Summary` and `## Files` sections of `framework-progress.md`. The builder's Stop hook
+   has already run `npm run typecheck && npm run lint` — completion implies they passed.
+2. If the builder reported blockers for the test-writer (missing helper, unresolved design
+   question), surface them to the user before starting Phase 5.
 
 ## Phase 5: Write tests
 
-Spawn the **e2e-test-writer** agent. Use one agent for a single feature
-file / POM. Parallelize only if the plan contains 2+ independent feature
-files that don't share new step definitions or POM changes.
+Spawn the **e2e-test-writer** agent. Use one agent for a single feature file / POM. Parallelize only
+if the plan contains 2+ independent feature files that don't share new step definitions or POM
+changes.
 
 **Single feature / sequential:**
 
@@ -277,8 +269,8 @@ After completing, write progress to:
 .claude/scratchpads/<task-name>/test-progress.md
 ```
 
-**Parallel feature files** — spawn each test-writer with
-`isolation: "worktree"`. Use `$SCRATCHPAD` for absolute paths:
+**Parallel feature files** — spawn each test-writer with `isolation: "worktree"`. Use `$SCRATCHPAD`
+for absolute paths:
 
 ```
 Implement the test scenarios described in the plan.
@@ -300,18 +292,17 @@ $SCRATCHPAD/test-progress-<chunk>.md
 ```
 
 After parallel worktree agents complete — merge step:
-1. For each chunk's `test-progress-<chunk>.md`, read the `Branch:`
-   header. If a progress file has no `Branch:` line the worktree agent
-   did not commit — surface the failure to the user and do not proceed
-   with merges for that chunk.
+
+1. For each chunk's `test-progress-<chunk>.md`, read the `Branch:` header. If a progress file has no
+   `Branch:` line the worktree agent did not commit — surface the failure to the user and do not
+   proceed with merges for that chunk.
 2. Merge each reported worktree branch into the current branch:
    ```bash
    git merge <worktree-branch> --no-edit
    ```
 3. Run `npm run typecheck && npm test` on the merged result.
-4. If tests fail because of a merge artifact (e.g., conflicting step
-   definition names), resolve in the main session or re-spawn the
-   affected test-writer.
+4. If tests fail because of a merge artifact (e.g., conflicting step definition names), resolve in
+   the main session or re-spawn the affected test-writer.
 
 **Wait for ALL test-writer commits to finish before proceeding.**
 
@@ -342,12 +333,13 @@ Write the review to: .claude/scratchpads/<task-name>/review.md
 ```
 
 After the reviewer finishes:
-1. Read the `### Verdict` section of `review.md` first. Only read
-   `### Findings` if the verdict requires fixes.
+
+1. Read the `### Verdict` section of `review.md` first. Only read `### Findings` if the verdict
+   requires fixes.
 2. If verdict is **Ready to run** — proceed to Phase 7.
-3. If **Critical** findings: spawn the appropriate doer
-   (e2e-framework-builder for framework issues, e2e-test-writer for
-   test issues) with:
+3. If **Critical** findings: spawn the appropriate doer (e2e-framework-builder for framework issues,
+   e2e-test-writer for test issues) with:
+
    ```
    Fix the critical issues listed in the review report.
 
@@ -358,13 +350,15 @@ After the reviewer finishes:
 
    Fix only the items marked Critical. Commit each fix separately.
    ```
-   After fixes, loop back to Phase 5 verification (`npm test`) then
-   re-enter Phase 6 for a second pass.
-4. If only **Warning** findings: present each to the user and ask
-   whether to fix now, defer, or skip.
 
-**Max review cycles: 2.** If still failing after 2 cycles, report the
-remaining issues to the user and ask how to proceed.
+   After fixes, loop back to Phase 5 verification (`npm test`) then re-enter Phase 6 for a second
+   pass.
+
+4. If only **Warning** findings: present each to the user and ask whether to fix now, defer, or
+   skip.
+
+**Max review cycles: 2.** If still failing after 2 cycles, report the remaining issues to the user
+and ask how to proceed.
 
 ## Phase 7: Verify and report
 
@@ -376,14 +370,12 @@ remaining issues to the user and ask how to proceed.
 2. If tests fail:
    - Read the Cucumber HTML/JSON report under `reports/`.
    - Classify each failure:
-     - **Test bug** (selector wrong, flaky wait, timing) — re-spawn
-       `e2e-test-writer` with the failure.
-     - **dApp bug** (application misbehaves) — append to `BUGS.md` and
-       mark the scenario `@bug` (or skip with a reason). Do NOT change
-       assertions to make a bug pass.
+     - **Test bug** (selector wrong, flaky wait, timing) — re-spawn `e2e-test-writer` with the
+       failure.
+     - **dApp bug** (application misbehaves) — append to `BUGS.md` and mark the scenario `@bug` (or
+       skip with a reason). Do NOT change assertions to make a bug pass.
      - **Framework bug** — re-spawn `e2e-framework-builder`.
-3. If the user asked for a PR, ask confirmation, rebase on main, then
-   open the PR:
+3. If the user asked for a PR, ask confirmation, rebase on main, then open the PR:
    ```bash
    gh pr create --title "<title>" --body "<body>"
    ```
@@ -395,39 +387,39 @@ remaining issues to the user and ask how to proceed.
 
 ## Error Handling
 
-- If any agent fails (crashes, no output, infinite loop): report to the
-  user, do not retry automatically. Let the user decide.
-- If `npm run typecheck` or `npm test` fails between phases: fix before
-  proceeding. Never pass broken code to the next phase.
-- If the user wants to stop mid-pipeline: that's fine. Scratchpad files
-  preserve all context for later resume.
-- If a browser MCP disconnects mid-exploration: tell the user, offer to
-  resume or fall back to selector-discovery.
+- If any agent fails (crashes, no output, infinite loop): report to the user, do not retry
+  automatically. Let the user decide.
+- If `npm run typecheck` or `npm test` fails between phases: fix before proceeding. Never pass
+  broken code to the next phase.
+- If the user wants to stop mid-pipeline: that's fine. Scratchpad files preserve all context for
+  later resume.
+- If a browser MCP disconnects mid-exploration: tell the user, offer to resume or fall back to
+  selector-discovery.
 
 ## Session Recovery
 
-All intermediate artefacts live in `.claude/scratchpads/<task-name>/`.
-A new session can resume by:
+All intermediate artefacts live in `.claude/scratchpads/<task-name>/`. A new session can resume by:
 
 1. Reading `phase-state.md` to identify the last active phase.
-2. Cross-checking with `git log` and `git status` for commits that
-   may have landed after `phase-state.md` was written.
-3. Picking up from the last completed phase. If `phase-state.md` says
-   "in-progress", re-run that phase — partial results are not guaranteed.
+2. Cross-checking with `git log` and `git status` for commits that may have landed after
+   `phase-state.md` was written.
+3. Picking up from the last completed phase. If `phase-state.md` says "in-progress", re-run that
+   phase — partial results are not guaranteed.
 
 ## Scratchpad Files
 
-| File | Written by | Read by |
-|------|-----------|---------|
-| `task.md` | orchestrator | all agents |
-| `exploration.md` | dapp-explorer | e2e-architect, e2e-test-writer, orchestrator |
-| `plan.md` | e2e-architect | e2e-framework-builder, e2e-test-writer, e2e-test-reviewer, orchestrator |
-| `framework-progress.md` | e2e-framework-builder | e2e-test-writer, e2e-test-reviewer, orchestrator |
-| `test-progress[-<chunk>].md` | e2e-test-writer | e2e-test-reviewer, orchestrator |
-| `review.md` | e2e-test-reviewer | doer (fix cycle), orchestrator |
-| `phase-state.md` | orchestrator | orchestrator (session recovery) |
+| File                         | Written by            | Read by                                                                 |
+| ---------------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `task.md`                    | orchestrator          | all agents                                                              |
+| `exploration.md`             | dapp-explorer         | e2e-architect, e2e-test-writer, orchestrator                            |
+| `plan.md`                    | e2e-architect         | e2e-framework-builder, e2e-test-writer, e2e-test-reviewer, orchestrator |
+| `framework-progress.md`      | e2e-framework-builder | e2e-test-writer, e2e-test-reviewer, orchestrator                        |
+| `test-progress[-<chunk>].md` | e2e-test-writer       | e2e-test-reviewer, orchestrator                                         |
+| `review.md`                  | e2e-test-reviewer     | doer (fix cycle), orchestrator                                          |
+| `phase-state.md`             | orchestrator          | orchestrator (session recovery)                                         |
 
 **Read dependencies by agent:**
+
 - dapp-explorer → `task.md`
 - e2e-architect → `task.md` + `exploration.md` (if exists)
 - e2e-framework-builder → `task.md` + `plan.md` + `exploration.md` (if relevant)
