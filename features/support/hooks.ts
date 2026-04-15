@@ -7,6 +7,7 @@ import {
   Before,
   BeforeAll,
   Status,
+  setDefaultTimeout,
   type ITestCaseHookParameter,
 } from '@cucumber/cucumber';
 
@@ -19,7 +20,14 @@ import type { CustomWorld } from './world.ts';
 
 const logger = new Logger('hooks');
 
-BeforeAll({ timeout: 120_000 }, async function () {
+// Cucumber's default per-step timeout is 5s. Web3 flows routinely need
+// more: waiting for the dApp to hydrate, Reown AppKit web-components to
+// mount, Turnkey session endpoints to round-trip. 30s is a comfortable
+// ceiling; individual steps may set a tighter timeout in their callback
+// options if they want to fail faster.
+setDefaultTimeout(30_000);
+
+BeforeAll({ timeout: 300_000 }, async function () {
   logger.info('BeforeAll: initialising browser session');
   await initSession();
 });
