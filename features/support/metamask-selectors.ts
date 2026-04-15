@@ -33,29 +33,10 @@ export function getMetaMaskHomeUrl(hashPath = ''): string {
   return `chrome-extension://${id}/home.html${suffix}`;
 }
 
-/** Popup URL path fragments — ID-agnostic, so plain constants. */
-export const MetaMaskPopupUrls = {
-  connectPopupFragment: '/notification.html#/connect/',
-  signaturePopupFragment: '/notification.html#/confirm-transaction/',
-} as const;
-
 export const MetaMaskTestIds = {
   unlockPasswordInput: 'unlock-password',
   unlockSubmit: 'unlock-submit',
   connectedOriginRow: (origin: string) => `connected-sites-row-${origin}`,
   disconnectButton: 'disconnect-site-button',
   disconnectConfirmButton: 'disconnect-all-modal-confirm-button',
-} as const;
-
-/**
- * Data-testids MetaMask uses on the Confirm / Cancel buttons across popup
- * versions. `confirm-footer-*` is the current MV3 flow; `confirm-btn` /
- * `cancel-btn` are the legacy names Dappwright 2.9.2 hardcodes. Chain both
- * with `.or()` so either version resolves.
- */
-export const MetaMaskPopupButtonTestIds = {
-  confirmPrimary: 'confirm-footer-button',
-  confirmLegacy: 'confirm-btn',
-  cancelPrimary: 'confirm-footer-cancel-button',
-  cancelLegacy: 'cancel-btn',
 } as const;

@@ -6,10 +6,6 @@ import dappwright, {
 } from '@tenkeylabs/dappwright';
 
 import { Logger } from '../../features/support/logger.ts';
-import {
-  MetaMaskPopupButtonTestIds,
-  MetaMaskPopupUrls,
-} from '../../features/support/metamask-selectors.ts';
 
 const logger = new Logger('MetaMaskWallet');
 
@@ -82,56 +78,26 @@ export class MetaMaskWallet {
   }
 
   async approveConnection(): Promise<void> {
-    logger.info('approving MetaMask connect popup');
-    await this.clickPopupButton(MetaMaskPopupUrls.connectPopupFragment, 'confirm');
+    // dappwright.signin() waits for the next popup Page event on the context,
+    // clicks confirm-btn if the connect popup is on stage 1 ("Connect this
+    // website"), then clicks confirm-footer-button (stage 2). The helper
+    // throws if the popup does not close, so no custom catch-swallow.
+    logger.info('approving MetaMask connect popup via Dappwright.signin()');
+    await this.dappwright.signin();
   }
 
   async signMessage(): Promise<void> {
-    logger.info('signing MetaMask signature-request popup');
-    await this.clickPopupButton(MetaMaskPopupUrls.signaturePopupFragment, 'confirm');
+    // Same helper, second invocation — picks up the signature popup after the
+    // connect popup closes. "Connect this website" is absent, so the stage-1
+    // branch is skipped and the sole confirm-footer-button click signs.
+    logger.info('confirming MetaMask signature popup via Dappwright.signin()');
+    await this.dappwright.signin();
   }
 
   async rejectConnection(): Promise<void> {
-    logger.info('rejecting MetaMask connect popup');
-    await this.clickPopupButton(MetaMaskPopupUrls.connectPopupFragment, 'cancel');
-  }
-
-  private async clickPopupButton(urlFragment: string, action: 'confirm' | 'cancel'): Promise<void> {
-    // Match popup pages by `notification.html` only. The hash fragment
-    // (`#/connect/<uuid>` / `#/confirm-transaction/<uuid>/…`) is set
-    // asynchronously after the `page` event fires, so filtering on it
-    // race-conditions the match.
-    const isMetaMaskPopup = (p: Page): boolean =>
-      p.url().startsWith('chrome-extension://') && p.url().includes('notification.html');
-
-    const popup =
-      this.context.pages().find((p) => isMetaMaskPopup(p)) ??
-      (await this.context.waitForEvent('page', {
-        predicate: isMetaMaskPopup,
-        timeout: 20_000,
-      }));
-    await popup.waitForLoadState('domcontentloaded');
-    // Do NOT `waitForLoadState('networkidle')` — MetaMask's popup keeps
-    // long-lived background pings, so networkidle never fires.
-    await popup.waitForURL((url) => url.toString().includes(urlFragment), { timeout: 5_000 });
-
-    // MV3 popup uses `confirm-footer-*` testids; legacy Dappwright codepath
-    // uses `confirm-btn` / `cancel-btn`. Chain both via `.or()`.
-    const primaryId =
-      action === 'confirm'
-        ? MetaMaskPopupButtonTestIds.confirmPrimary
-        : MetaMaskPopupButtonTestIds.cancelPrimary;
-    const legacyId =
-      action === 'confirm'
-        ? MetaMaskPopupButtonTestIds.confirmLegacy
-        : MetaMaskPopupButtonTestIds.cancelLegacy;
-    const button = popup.getByTestId(primaryId).or(popup.getByTestId(legacyId)).first();
-    await button.waitFor({ state: 'visible', timeout: 10_000 });
-    // `force: true` skips Playwright's actionability polling, which hangs
-    // under MetaMask's LavaMoat scuttling mode.
-    await button.click({ force: true, timeout: 5_000 });
-    if (!popup.isClosed()) {
-      await popup.waitForEvent('close', { timeout: 10_000 }).catch(() => undefined);
-    }
+    // Dappwright.reject() clicks confirm-footer-cancel-button OR cancel-btn
+    // via its own `.or()` chain; covers both stage-1 and stage-2 cancels.
+    logger.info('rejecting MetaMask connect popup via Dappwright.reject()');
+    await this.dappwright.reject();
   }
 }
