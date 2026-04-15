@@ -6,7 +6,10 @@ import dappwright, {
 } from '@tenkeylabs/dappwright';
 
 import { Logger } from '../../features/support/logger.ts';
-import { MetaMaskConnectPopup, MetaMaskUrls } from '../../features/support/metamask-selectors.ts';
+import {
+  MetaMaskPopupButtonTestIds,
+  MetaMaskUrls,
+} from '../../features/support/metamask-selectors.ts';
 import { programmaticallyRevokePermissions } from '../../features/support/wallet-reconciler.ts';
 
 const logger = new Logger('MetaMaskWallet');
@@ -80,53 +83,93 @@ export class MetaMaskWallet {
 
   /**
    * Approves the pending `eth_requestAccounts` (Connect) popup. Dappwright
-   * polls for the popup window internally.
+   * 2.9.2's `approve()` targets the legacy testid `confirm-btn` which is
+   * missing from the MM popup layout used by MetaMask 13.17.0 in this
+   * project — the call hangs forever. We wait for the popup tab ourselves
+   * and click the Connect button by role + accessible name; that pair is
+   * stable across recent MM releases.
    */
   async approveConnection(): Promise<void> {
     logger.info('approving MetaMask connect popup');
-    await this.dappwright.approve();
+    await this.clickPopupButton(MetaMaskUrls.connectPopupFragment, 'confirm');
   }
 
   /**
-   * Signs the pending `personal_sign` (SIWE nonce) popup.
+   * Signs the pending `personal_sign` (SIWE nonce) popup. Same testid-OR
+   * rationale as `approveConnection()` — Dappwright's `sign()` clicks by a
+   * single (legacy) testid and is version-coupled.
    */
   async signMessage(): Promise<void> {
     logger.info('signing MetaMask signature-request popup');
-    await this.dappwright.sign();
+    await this.clickPopupButton(MetaMaskUrls.signaturePopupFragment, 'confirm');
   }
 
   /**
-   * Rejects the pending Connect popup. Uses Dappwright's `reject()` which
-   * clicks the Cancel button on whatever popup is currently active —
-   * Dappwright is popup-agnostic, so this works for both Connect and
-   * signature popups, but this project only exercises the Connect reject
-   * branch from step defs.
-   *
-   * If `reject()` fails to find the popup (version drift), falls back to
-   * locating the popup tab in the context by URL fragment and clicking
-   * the Cancel button by role+name.
+   * Shared popup-wait + click-by-name helper. Picks an already-open popup
+   * if one is present (Dappwright's own pre-click tabs can leave a popup
+   * attached for a few ms) otherwise polls for a new `page` event on the
+   * context. Button match is role + accessible name — one testid change
+   * in MetaMask will not break this.
+   */
+  private async clickPopupButton(urlFragment: string, action: 'confirm' | 'cancel'): Promise<void> {
+    // Dappwright installs MetaMask as an unpacked extension — its extension
+    // ID is not the stable Web Store ID (`nkbihfbeogaeaoehlefnkodbefgpgknn`)
+    // but a random one per install. We match popup pages by
+    // `notification.html` only (MetaMask's popup path is stable); the hash
+    // fragment (`#/connect/<uuid>` vs `#/confirm-transaction/<uuid>/…`) is
+    // set asynchronously after the `page` event fires, so filtering on it
+    // race-conditions the match.
+    const isMetaMaskPopup = (p: Page): boolean =>
+      p.url().startsWith('chrome-extension://') && p.url().includes('notification.html');
+
+    const popup =
+      this.context.pages().find((p) => isMetaMaskPopup(p)) ??
+      (await this.context.waitForEvent('page', {
+        predicate: isMetaMaskPopup,
+        timeout: 20_000,
+      }));
+    await popup.waitForLoadState('domcontentloaded');
+    // Wait for the expected hash to confirm we're on the right step — the
+    // Connect popup and the Signature popup both use `notification.html`.
+    // Do NOT `waitForLoadState('networkidle')` — MetaMask's popup keeps
+    // long-lived background pings to its service worker, so networkidle
+    // never fires and the default 30s timeout would eat the whole step.
+    await popup.waitForURL((url) => url.toString().includes(urlFragment), { timeout: 5_000 });
+    logger.debug('clickPopupButton url=%s action=%s', popup.url(), action);
+
+    // Prefer `data-testid`. MetaMask's MV3 popup uses
+    // `confirm-footer-button` / `confirm-footer-cancel-button`; the legacy
+    // Dappwright codepath uses `confirm-btn` / `cancel-btn`. Chain both via
+    // `.or()` so either version resolves. `force: true` bypasses the
+    // actionability polling that LavaMoat's scuttling mode sometimes hangs
+    // — the popup is the only window open, the button is on-screen, no
+    // overlay covers it.
+    const primaryId =
+      action === 'confirm'
+        ? MetaMaskPopupButtonTestIds.confirmPrimary
+        : MetaMaskPopupButtonTestIds.cancelPrimary;
+    const legacyId =
+      action === 'confirm'
+        ? MetaMaskPopupButtonTestIds.confirmLegacy
+        : MetaMaskPopupButtonTestIds.cancelLegacy;
+    const button = popup.getByTestId(primaryId).or(popup.getByTestId(legacyId)).first();
+    await button.waitFor({ state: 'visible', timeout: 10_000 });
+    await button.click({ force: true, timeout: 5_000 });
+    if (!popup.isClosed()) {
+      await popup.waitForEvent('close', { timeout: 10_000 }).catch(() => {
+        // popup already torn down by MetaMask before we started waiting
+      });
+    }
+  }
+
+  /**
+   * Rejects the pending Connect popup by clicking Cancel. Same popup-match
+   * strategy as `approveConnection()` — see `clickPopupButton` for the
+   * Dappwright-bypass rationale.
    */
   async rejectConnection(): Promise<void> {
     logger.info('rejecting MetaMask connect popup');
-    try {
-      await this.dappwright.reject();
-      return;
-    } catch (err) {
-      logger.warn('dappwright.reject() threw, falling back to explicit Cancel click: %o', err);
-    }
-
-    const popup = this.context
-      .pages()
-      .find((p) => p.url().includes(MetaMaskUrls.connectPopupFragment));
-    if (!popup) {
-      throw new Error(
-        'rejectConnection: no MetaMask Connect popup found (fast path + fallback both failed).',
-      );
-    }
-    await popup.getByRole('button', { name: MetaMaskConnectPopup.cancelButtonName }).click();
-    await popup.waitForEvent('close').catch(() => {
-      // popup may already be closed by the time we await
-    });
+    await this.clickPopupButton(MetaMaskUrls.connectPopupFragment, 'cancel');
   }
 
   /**

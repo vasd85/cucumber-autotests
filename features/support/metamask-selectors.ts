@@ -47,3 +47,27 @@ export const MetaMaskConnectPopup = {
   cancelButtonName: 'Cancel',
   connectButtonName: 'Connect',
 } as const;
+
+/**
+ * Role+name fallback for the signature-request popup. MetaMask's newer
+ * popup layout lost the `confirm-btn` testid Dappwright 2.9.2 hardcodes
+ * in `approve()` / `sign()`; role+name is a stable alternative.
+ */
+export const MetaMaskSignaturePopup = {
+  cancelButtonName: 'Cancel',
+  signButtonName: 'Confirm',
+} as const;
+
+/**
+ * Data-testids MetaMask uses on the Confirm / Cancel buttons across
+ * popup versions. `confirm-footer-button` / `confirm-footer-cancel-button`
+ * are the newer MV3 flow; `confirm-btn` / `cancel-btn` are the legacy
+ * names Dappwright 2.9.2 hardcodes. Locators that click these try each
+ * testid in turn via Playwright's `.or()`.
+ */
+export const MetaMaskPopupButtonTestIds = {
+  confirmPrimary: 'confirm-footer-button',
+  confirmLegacy: 'confirm-btn',
+  cancelPrimary: 'confirm-footer-cancel-button',
+  cancelLegacy: 'cancel-btn',
+} as const;
