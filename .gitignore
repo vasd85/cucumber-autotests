@@ -10,6 +10,7 @@ node_modules
 
 # Reports and artifacts
 /reports
+/reports/screenshots/
 /screenshots
 /test-results
 /playwright-report

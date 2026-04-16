@@ -14,5 +14,13 @@
     "curly": "error",
     "no-nested-ternary": "error"
   },
+  "overrides": [
+    {
+      "files": ["features/support/logger.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["node_modules", "reports", "test-results", "playwright-report"]
 }

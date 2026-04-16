@@ -5,8 +5,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "cucumber-js",
-    "test:smoke": "cucumber-js --tags @smoke",
+    "test": "TEST_PARALLEL_INDEX=0 NODE_OPTIONS='--import tsx/esm' cucumber-js",
+    "test:smoke": "TEST_PARALLEL_INDEX=0 NODE_OPTIONS='--import tsx/esm' cucumber-js --tags @smoke",
+    "test:regression": "TEST_PARALLEL_INDEX=0 NODE_OPTIONS='--import tsx/esm' cucumber-js --tags @regression",
+    "test:tag": "TEST_PARALLEL_INDEX=0 NODE_OPTIONS='--import tsx/esm' cucumber-js --tags",
     "browsers:install": "playwright install chromium",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
@@ -16,6 +18,7 @@
     "@cucumber/cucumber": "^11.2.0",
     "@playwright/test": "^1.48.2",
     "@tenkeylabs/dappwright": "^2.9.2",
+    "@types/debug": "^4.1.13",
     "@types/node": "^20.14.2",
     "@typescript-eslint/eslint-plugin": "^8.10.0",
     "@typescript-eslint/parser": "^8.10.0",
@@ -26,5 +29,9 @@
     "prettier": "^3.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "debug": "^4.4.3",
+    "dotenv": "^16.6.1"
   }
 }
