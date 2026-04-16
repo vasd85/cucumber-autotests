@@ -5,7 +5,7 @@ description: >-
   step definitions, page objects, framework infrastructure, and wallet wrappers. Thinker agent —
   read-only, writes review report to the scratchpad. Use before declaring an e2e change ready or
   opening a PR.
-tools: Read, Glob, Grep, Bash, Write, LSP
+tools: Read, Glob, Grep, Bash, Write, LSP, mcp__playwright__*
 disallowedTools: Edit
 model: opus
 effort: high
