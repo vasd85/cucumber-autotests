@@ -13,65 +13,80 @@ automated test. Entry format follows `.claude/skills/e2e-conventions/SKILL.md`.
 
 ---
 
-## `/api/asset/multi-pair-info` returns HTTP 500 on every landing-page load
+## Wallet sign-request messages contain raw JSON instead of human-readable text
 
-- **Summary:** The `multi-pair-info` backend call fails with HTTP 500 on at
-  least two consecutive requests per page load, so whichever widget depends on
-  it renders empty / stale while the rest of the page fills in.
+- **Summary:** During the wallet-connect flow, both signature requests
+  (`approveConnection` and `signMessage`) display raw JSON payloads in the
+  MetaMask approval popup instead of a clear, user-friendly message explaining
+  what the user is signing.
 - **Repro:**
-  1. Open `https://dev.tradegenius.com/asset` in a fresh browser session
-     (logged-out is enough).
-  2. Open DevTools → Network, filter on `multi-pair-info`.
-  3. Reload the page.
-- **Expected:** HTTP 200 with the pair-info JSON, or a well-handled
-  degradation on the frontend (no console error, no repeated retries).
-- **Actual:** HTTP 500 on at least two sequential calls per load. Other
-  endpoints on the page succeed, so the overall UI still renders but the
-  dependent widget stays blank.
-- **Severity:** major — production-adjacent endpoint returning 500 is a
-  monitoring / reliability signal and likely masks a missing or slow
-  dependency.
+  1. Navigate to `https://dev.tradegenius.com/asset`.
+  2. Click "Connect Wallet" → select MetaMask.
+  3. Approve the connection in MetaMask — observe the first signature request
+     (`approveConnection`): the popup body shows raw JSON:
+     ```
+     {"statement":"By signing this message, you authenticate access to your TradeGenius account, and agree to the Terms & Conditions.","domain":"tradegenius.com","nonce":"...","expirationTime":"..."}
+     ```
+  4. After approving, a second signature request (`signMessage`) appears with
+     another raw JSON blob:
+     ```
+     {"parameters":{"publicKey":"...","expirationSeconds":"1209600"},"organizationId":"...","timestampMs":"...","type":"ACTIVITY_TYPE_STAMP_LOGIN"}
+     ```
+- **Expected:** Each signature popup should present a human-readable, formatted
+  message — e.g. a plain-English statement for `approveConnection` and at most
+  a brief explanation of the stamp-login action for `signMessage`. Technical
+  fields (`nonce`, `organizationId`, `publicKey`, etc.) should be hidden or
+  shown only in an expandable "Details" section.
+- **Actual:** Both popups dump the full JSON object as-is. Non-technical users
+  see opaque machine data with no clear indication of what they are consenting
+  to, which erodes trust and violates standard Web3 UX practices (EIP-4361 /
+  Sign-In with Ethereum recommends a human-readable `statement` rendered as
+  plain text, not embedded in a JSON wrapper).
+- **Severity:** major — directly affects user trust and informed consent.
+  Signing opaque data is a well-known phishing vector; users trained to "just
+  click Sign" on unreadable messages are more vulnerable to malicious dApps.
 
 ---
 
-## Duplicate 404 flood on `/api/proxy-image` for the `wkeyDAO2` token logo
+## Terms of Service dialog flashes briefly for a returning user who already accepted it
 
-- **Summary:** The trending strip triggers 20+ duplicate HTTP 404 requests
-  to the same `/api/proxy-image?url=...wkeyDAO2...small.png` URL on every
-  page load, spamming the devtools console and wasting proxy bandwidth.
+- **Summary:** When a previously registered wallet (Terms already accepted,
+  2FA not yet configured) connects after the browser's site data has been
+  cleared, the Terms of Service dialog appears for a split second and then
+  disappears on its own before the 2FA setup dialog opens. The user should
+  never see the ToS form again after accepting it once.
 - **Repro:**
-  1. Open `https://dev.tradegenius.com/asset`.
-  2. Open DevTools → Network.
-  3. Filter by `proxy-image`.
-  4. Wait for the trending strip to finish loading.
-- **Expected:** Either the proxy returns 200 with an image, or the frontend
-  caches the 404 result after the first miss and stops retrying.
-- **Actual:** The same proxy URL fires 20+ identical 404s per page load.
-- **Severity:** minor — not user-visible, but noisy for operators and a
-  signal that the frontend is missing negative-cache / retry logic.
+  1. Clear the browser's site data for `dev.tradegenius.com` (cookies,
+     localStorage, sessionStorage).
+  2. Navigate to `https://dev.tradegenius.com/asset`.
+  3. Click "Connect Wallet" → select MetaMask → approve and sign.
+  4. Observe the post-login onboarding flow.
+- **Expected:** The ToS dialog is not shown at all — the server already knows
+  this wallet accepted the terms, so the flow should skip straight to the 2FA
+  setup dialog.
+- **Actual:** The ToS dialog renders visibly for a brief moment (≈ 100–300 ms),
+  then auto-dismisses and the 2FA dialog appears. The flash is noticeable and
+  gives the impression of a broken or unstable UI.
+- **Severity:** minor — no data loss or functional breakage, but the visual
+  glitch undermines perceived quality. Likely a race condition: the client
+  renders the default onboarding step before the server response confirming
+  ToS acceptance arrives and advances the flow.
 
 ---
 
-## First-time username onboarding commits permanently on a single click
+## Missing space in 2FA email verification dialog text
 
-- **Summary:** After a successful connect + SIWE signature, a first-time
-  wallet is forced into a mandatory username dialog prefilled with a random
-  handle (e.g. `@SexyEinstein`). The dialog shows the warning
-  "You can only choose this once." A single click on `Next` commits the
-  prefilled handle permanently, with no confirmation step and no way to
-  change it later.
+- **Summary:** On the email-based 2FA code entry form, two sentences are
+  concatenated without a space: `"...via email.Please check..."`.
 - **Repro:**
-  1. Connect + sign with a brand-new wallet that has never completed
-     TradeGenius onboarding before.
-  2. Accept the Terms of Service on the `1/2` dialog.
-  3. On the Username dialog, leave the prefilled random handle and click
-     `Next`.
-- **Expected:** Either a confirmation step ("This handle is permanent —
-  continue?") before committing, or the ability to change the handle later
-  from account settings.
-- **Actual:** One click commits the prefilled handle permanently.
-- **Severity:** major — a single accidental tap permanently brands the
-  account with a system-generated handle. Data-integrity / UX defect, not
-  just cosmetic.
+  1. Log in with a wallet that has email-based 2FA enabled.
+  2. Observe the text on the 2FA code entry dialog.
+- **Expected:** `"You have Two Factor Authentication enabled via email. Please
+  check the email address you used to enable Two Factor Auth to receive a
+  code."`
+- **Actual:** `"You have Two Factor Authentication enabled via email.Please
+  check the email address you used to enable Two Factor Auth to receive a
+  code."` — no space after the period.
+- **Severity:** trivial — cosmetic typo, no functional impact.
 
 ---
